@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Duplicate Highlighter</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 30px 25px;
+            border-radius: 10px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            border: 1px solid #e0e0e0;
+        }
+
+        .logo {
+            width: 120px; /* Adjust logo size */
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin: 10px auto 20px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            padding: 8px 10px;
+            border-radius: 5px;
+            width: 80%;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #2c5c8c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #20486a;
+        }
+
+        #download-btn {
+            background-color: #4CAF50;
+        }
+
+        #download-btn:hover {
+            background-color: #3c8c40;
+        }
+
+        #result {
+            margin-top: 20px;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f8f8;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .highlight {
+            background-color: #e53935;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Add Logo -->
+        <img src="Credico Logo.png" alt="Logo" class="logo" />
+
+        <h1>Upload Excel File to Highlight ClientID Duplicates</h1>
+
+        <!-- File Upload Input -->
+        <input type="file" id="excel-file" accept=".xlsx, .xls" />
+        
+        <!-- Go Button -->
+        <button id="go-button">Process File</button>
+
+        <!-- Download Button -->
+        <button id="download-btn" style="display: none;">Download Processed File</button>
+
+        <!-- Result Display Area -->
+        <div id="result"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
+    <script>
+        let processedData = null;
+
+        // Button event listener for "Go"
+        document.getElementById("go-button").addEventListener("click", function() {
+            const fileInput = document.getElementById("excel-file");
+            const file = fileInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    processedData = highlightClientIdDuplicates(json);
+                    document.getElementById('download-btn').style.display = 'inline-block';
+                };
+
+                reader.readAsBinaryString(file);
+            } else {
+                alert("Please upload an Excel file first.");
+            }
+        });
+
+        function highlightClientIdDuplicates(data) {
+            const clientIdIndex = data[0].indexOf('ClientID');
+            if (clientIdIndex === -1) {
+                alert("No ClientID column found in the Excel file.");
+                return;
+            }
+
+            const clientIds = data.slice(1).map(row => row[clientIdIndex]);
+            const duplicates = findDuplicates(clientIds);
+
+            const filteredData = data.filter((row, rowIndex) => {
+                if (rowIndex === 0) return true;
+                return duplicates.includes(row[clientIdIndex]);
+            });
+
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = '';
+
+            filteredData.forEach(row => {
+                const rowDiv = document.createElement("div");
+                rowDiv.innerHTML = row.map((cell, index) => {
+                    if (index === clientIdIndex && duplicates.includes(cell)) {
+                        return `<span class="highlight">${cell}</span>`;
+                    }
+                    return cell;
+                }).join(' ');
+                resultDiv.appendChild(rowDiv);
+            });
+
+            return filteredData;
+        }
+
+        function findDuplicates(arr) {
+            const seen = new Set();
+            const duplicates = new Set();
+
+            arr.forEach(item => {
+                if (seen.has(item)) {
+                    duplicates.add(item);
+                } else {
+                    seen.add(item);
+                }
+            });
+
+            return Array.from(duplicates);
+        }
+
+        document.getElementById("download-btn").addEventListener("click", function() {
+            if (processedData) {
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(processedData);
+                XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+                XLSX.writeFile(wb, "highlighted_clientid_duplicates.xlsx");
+            }
+        });
+    </script>
+</body>
+</html>
